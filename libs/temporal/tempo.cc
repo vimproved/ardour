@@ -2316,35 +2316,8 @@ Temporal::BBT_Argument
 TempoMap::bbt_at (Temporal::Beats const & qn) const
 {
 	TempoMetric metric (metric_at (qn));
-	superclock_t ref (std::min (metric.tempo().sclock(), metric.meter().sclock()));
-	return BBT_Argument (ref, metric.bbt_at (qn));
+	return BBT_Argument (metric.reftime(), metric.bbt_at (qn));
 }
-
-#if 0
-samplepos_t
-TempoMap::sample_at (Temporal::Beats const & qn) const
-{
-	return superclock_to_samples (metric_at (qn).superclock_at (qn), TEMPORAL_SAMPLE_RATE);
-}
-
-samplepos_t
-TempoMap::sample_at (Temporal::BBT_Time const & bbt) const
-{
-	return samples_to_superclock (metric_at (bbt).superclock_at (bbt), TEMPORAL_SAMPLE_RATE);
-}
-
-samplepos_t
-TempoMap::sample_at (timepos_t const & pos) const
-{
-	if (pos.is_beat()) {
-		return sample_at (pos.beats ());
-	}
-
-	/* somewhat nonsensical to call this under these conditions but ... */
-
-	return pos.superclocks();
-}
-#endif
 
 superclock_t
 TempoMap::superclock_at (Temporal::Beats const & qn) const
@@ -2618,7 +2591,7 @@ TempoMap::get_grid (TempoMapPoints& ret, superclock_t rstart, superclock_t end, 
 			if (delta != BBT_Offset ()) {
 				bbt = on_bar;
 				Beats beats_delta = _meters.front().to_quarters (delta);
-				DEBUG_TRACE (DEBUG::Grid, string_compose ("simple reset start using bbt %1 via %2 (rounded by %3 beats %4)\n", bbt, on_bar, delta, beats_delta));
+				DEBUG_TRACE (DEBUG::Grid, string_compose ("simple reset start using bbt %1 via %2 (rounded by %3 beats %4) sc %5\n", bbt, on_bar, delta, beats_delta, start));
 			} else {
 				DEBUG_TRACE (DEBUG::Grid, string_compose ("bbt %1 was already on-bar or on-beat %2 start is %3\n", bbt, on_bar, start));
 			}
@@ -2626,6 +2599,7 @@ TempoMap::get_grid (TempoMapPoints& ret, superclock_t rstart, superclock_t end, 
 
 		Beats    beats (metric.quarters_at_superclock (start));
 
+		DEBUG_TRACE (DEBUG::Grid, string_compose ("reset start to %1 with beats %2 for %3\n", start, beats, bbt));
 		fill_grid_with_final_metric (ret, metric, start, rstart, end, bar_mod, beat_div, beats, bbt);
 
 		return _points.end();
@@ -3887,7 +3861,7 @@ TempoMap::metric_at (BBT_Argument const & bbt, bool can_match) const
 	 * time to get the metric.
 	 */
 
-	(void) get_tempo_and_meter (tp, mp, bbt.reference(), can_match, false);
+	(void) get_tempo_and_meter (tp, mp, bbt, can_match, false);
 
 	return TempoMetric (*tp, *mp);
 }

@@ -682,7 +682,7 @@ class LIBTEMPORAL_API GridIterator
   private:
 	bool             valid;
 
-	TempoMap const * map; /* nullptr or the map instance this GridIterator 
+	TempoMap const * map; /* nullptr or the map instance this GridIterator
 	                       * was last used with.
 	                       */
 };
@@ -1092,6 +1092,7 @@ class /*LIBTEMPORAL_API*/ TempoMap : public PBD::StatefulDestructible
 		   will all be the non-const versions of these methods.
 		*/
 
+		if (_tempos.size() == 1 && _meters.size() == 1) { t = &_tempos.front(); m = &_meters.front();  return _points.end(); }
 		return _get_tempo_and_meter<non_const_traits<superclock_t, superclock_t> > (t, m, &Point::sclock, sc, _points.begin(), _points.end(), &_tempos.front(), &_meters.front(), can_match, ret_iterator_after_not_at);
 	}
 
@@ -1099,18 +1100,46 @@ class /*LIBTEMPORAL_API*/ TempoMap : public PBD::StatefulDestructible
 	 * other similar call sites where we do not modify the map
 	 */
 
-	Points::const_iterator  get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, superclock_t sc, bool can_match, bool ret_iterator_after_not_at) const {
+	Points::const_iterator get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, superclock_t sc, bool can_match, bool ret_iterator_after_not_at) const {
+		if (_tempos.size() == 1 && _meters.size() == 1) { t = &_tempos.front(); m = &_meters.front();  return _points.end(); }
 		return _get_tempo_and_meter<const_traits<superclock_t, superclock_t> > (t, m, &Point::sclock, sc, _points.begin(), _points.end(), &_tempos.front(), &_meters.front(), can_match, ret_iterator_after_not_at);
 	}
-	Points::const_iterator  get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, Beats const & b, bool can_match, bool ret_iterator_after_not_at) const {
+	Points::const_iterator get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, Beats const & b, bool can_match, bool ret_iterator_after_not_at) const {
+		if (_tempos.size() == 1 && _meters.size() == 1) { t = &_tempos.front(); m = &_meters.front();  return _points.end(); }
 		return _get_tempo_and_meter<const_traits<Beats const &, Beats> > (t, m, &Point::beats, b, _points.begin(), _points.end(), &_tempos.front(), &_meters.front(), can_match, ret_iterator_after_not_at);
 	}
-	Points::const_iterator  get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, timepos_t const & pos, bool can_match, bool ret_iterator_after_not_at) const {
-		if (pos.time_domain() == BeatTime) {
-			return get_tempo_and_meter (t, m, pos.beats(), can_match, ret_iterator_after_not_at);
-		} else {
-			return get_tempo_and_meter (t, m, pos.superclocks(), can_match, ret_iterator_after_not_at);
+	Points::const_iterator get_tempo_and_meter (TempoPoint const *& t, MeterPoint const *& m, BBT_Argument const & bbt, bool can_match, bool ret_iterator_after_not_at) const {
+
+		if (_tempos.size() == 1 && _meters.size() == 1) { t = &_tempos.front(); m = &_meters.front();  return _points.end(); }
+
+		/* Skip through the tempo map to find the tempo and meter in
+		 * effect at the bbt's "reference" time, and use them as the
+		 * starting point for the normal operation of
+		 * _get_tempo_and_meter ()
+		 */
+
+		Tempos::const_iterator tp = _tempos.begin();
+		Meters::const_iterator mp = _meters.begin();
+		superclock_t ref = bbt.reference();
+
+		if (ref != 0) {
+			while (tp != _tempos.end()) {
+				Tempos::const_iterator nxt = tp; ++nxt;
+				if (nxt == _tempos.end() || nxt->sclock() > ref) {
+					break;
+				}
+				tp = nxt;
+			}
+			while (mp != _meters.end()) {
+				Meters::const_iterator nxt = mp; ++nxt;
+				if (nxt == _meters.end() || mp->sclock() > ref) {
+					break;
+				}
+				mp = nxt;
+			}
 		}
+
+		return _get_tempo_and_meter<const_traits<BBT_Time const &, BBT_Time> > (t, m, &Point::bbt, bbt, _points.begin(), _points.end(), &(*tp), &(*mp), can_match, ret_iterator_after_not_at);
 	}
 
 	/* This is private, and should not be callable from outside the map
